@@ -1,14 +1,42 @@
 #!/bin/bash
 
-# This script is to set default route with NAT.
+# This script is to set a default route for route tables that need NAT in the same VPC.
 
 MAC_ADDRESS=`curl http://169.254.169.254/latest/meta-data/network/interfaces/macs/`
 VPC_ID=`curl http://169.254.169.254/latest/meta-data/network/interfaces/macs/${MAC_ADDRESS:-1}/vpc-id`
-
 INSTANCE_ID=`curl http://169.254.169.254/latest/meta-data/instance-id`
 REGION=`curl http://169.254.169.254/latest/dynamic/instance-identity/document|grep region|awk -F\" '{print $4}'`
-#ROUTE_TABLES=`aws ec2 describe-tags --filter "Name=resource-type,Values=route-table"  "Name=key,Values=network" "Name=value,Values=private" --region $REGION --output text | awk '{print $3}'`
-ROUTE_TABLES=`Shings-Air:aws-auto-healing-nat schen$ aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID" --filters "Name=tag:$TAG_KEY,Values=$TAG_VALUE"`
+TAG_KEY="network"
+TAG_VALUE="private"
+
+# Print help
+function usage()
+{
+   echo ""
+   echo "$0 [options]"
+   echo "   --tag-key - route table tag key to indicate if it is a private subnet (default: $TAG_KEY)"
+   echo "   --tag-value - route table tag value to indicate if it is a private subnet (default: $TAG_VALUE)"
+   echo ""
+}
+
+# Get options
+while [ "$1" != "" ]; do
+    case $1 in
+        --tag-key)      shift
+                        $TAG_KEY=$1
+                        ;;
+        --tag-value)    shift
+                        $TAG_VALUE=$1
+                        ;;
+        *)              usage
+                        exit
+                        ;;
+    esac
+    shift
+done
+
+# Determine route tables that need to use NAT for the same VPC
+ROUTE_TABLES=`aws ec2 describe-route-tables --filters "Name=tag:$TAG_KEY,Values=$TAG_VALUE" --region $REGION --output text | grep ROUTETABLES | grep $VPC_ID | awk '{print $2}'`
 
 for i in $ROUTE_TABLES
 do
