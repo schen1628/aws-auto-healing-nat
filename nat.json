@@ -1,0 +1,204 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Launch a NAT instance",
+  "Parameters": {
+    "InstanceType": {
+      "Description": "Instance type for the NAT instance",
+      "Type": "String",
+      "Default": "t2.micro",
+      "AllowedValues": [
+        "t2.micro",
+        "t2.small",
+        "t2.medium"
+      ],
+      "ConstraintDescription": "Please enter one of these instance types: t2.micro, t2.small, t2.medium."
+    },
+    "KeyName": {
+      "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instance",
+      "Type": "String",
+      "Default": "schen"
+    },
+    "VpcId": {
+      "Description": "ID of the VPC hosting NAT instance",
+      "Type": "AWS::EC2::VPC::Id"
+    },
+    "NatSubnetId" : {
+      "Description" : "Subnet ID for hosting NAT instance",
+      "Type" : "List<AWS::EC2::Subnet::Id>"
+    },
+    "VpcCidrIp": {
+      "Type": "String",
+      "Description": "VPC CIDR block for NAT access",
+      "Default": "10.0.0.0/16"
+    }
+  },
+  "Mappings": {
+    "RegionMap": {
+      "us-east-1": {"AMI": "ami-b66ed3de"},
+      "us-west-1": {"AMI": "ami-1d2b2958"},
+      "us-west-2": {"AMI": "ami-290f4119"},
+      "eu-west-1": {"AMI": "ami-14913f63"},
+      "eu-central-1": {"AMI": "ami-ae380eb3"},
+      "ap-southeast-1": {"AMI": "ami-6aa38238"},
+      "ap-southeast-2": {"AMI": "ami-63f79559"},
+      "ap-northeast-1": {"AMI": "ami-27d6e626"},
+      "sa-east-1": {"AMI": "ami-8737829a"}
+    }
+  },
+  "Resources": {
+    "NatAutoScalingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+         "AvailabilityZones": { "Fn::GetAZs": "" },
+         "MinSize": "1",
+         "MaxSize": "1",
+         "Cooldown": "30",
+         "VPCZoneIdentifier": { "Ref": "NatSubnetId"},
+         "LaunchConfigurationName": {
+          "Ref": "LaunchConfig"
+        },
+        "HealthCheckGracePeriod": 60,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "NAT Instance",
+            "PropagateAtLaunch": "true"
+          }
+        ],
+        "HealthCheckType": "EC2"
+      }
+    },
+    "LaunchConfig": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+          "config" : {
+            "packages" : {},
+            "files" : {
+              "/tmp/nat.sh" : {
+                 "source" : "ihttps://raw.githubusercontent.com/schen1628/aws-auto-healing-nat/master/nat.sh",
+                 "mode" : "000755",
+                 "owner" : "ec2-user",
+                 "group" : "ec2-user"
+             }
+
+          },
+            "commands" : {
+               "01-create-route" : {
+                  "command" : "/tmp/nat.sh"
+               }
+            }
+          }
+        }
+      },      
+      "Properties": {
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash -v\n",
+
+                "yum update -y aws-cfn-bootstrap\n",
+
+                "# Install the files and packages from the metadata\n",
+                "/opt/aws/bin/cfn-init -v ",
+                "         --stack ", { "Ref" : "AWS::StackName" },
+                "         --resource LaunchConfig ",
+                "         --region ", { "Ref" : "AWS::Region" }, "\n",
+
+
+                "# Signal the status from cfn-init\n",
+                "/opt/aws/bin/cfn-signal -e $? ",
+                 "         --stack ", { "Ref" : "AWS::StackName" },
+                 "         --resource LaunchConfig ",
+                 "         --region ", { "Ref" : "AWS::Region" }, "\n"
+              ]
+            ]
+          }
+        },
+        "ImageId": {
+          "Fn::FindInMap": ["RegionMap", {"Ref": "AWS::Region"}, "AMI"]
+        },
+        "IamInstanceProfile": {"Ref": "NatInstanceProfile"},
+        "InstanceType": {"Ref": "InstanceType"},
+        "SecurityGroups": [ {"Ref": "NatSecurityGroup"}],
+        "KeyName": {"Ref": "KeyName"},
+        "EbsOptimized": false,
+        "AssociatePublicIpAddress": true
+      }
+    },
+    "NatSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "NAT Security Group",
+        "VpcId": {"Ref": "VpcId"},
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "all",
+            "FromPort": "0",
+            "ToPort": "65535",
+            "CidrIp": {"Ref": "VpcCidrIp"}
+          }
+        ]
+      }
+    },
+    "NatInstanceProfile": {
+      "Properties": {
+        "Path": "/",
+        "Roles": [
+          {
+            "Ref": "NatRole"
+          }
+        ]
+      },
+      "Type": "AWS::IAM::InstanceProfile"
+    },
+    "NatRole": {
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "sts:AssumeRole"
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "ec2.amazonaws.com"
+                ]
+              }
+            }
+          ]
+        },
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2:CreateRoute",
+                    "ec2:DeleteRoute",
+                    "ec2:ModifyInstanceAttribute",
+                    "ec2:ReplaceRoute"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            },
+            "PolicyName": "NatPolicy"
+          }
+        ]
+      },
+      "Type": "AWS::IAM::Role"
+    }
+  },
+  "Outputs": {
+    "NatAutoScalingGroup": {
+      "Value": {"Ref": "NatAutoScalingGroup"},
+      "Description": "Auto-scaling group ID"
+    }
+  }
+}

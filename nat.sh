@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# This script is to set default route with NAT.
+
 MAC_ADDRESS=`curl http://169.254.169.254/latest/meta-data/network/interfaces/macs/`
 VPC_ID=`curl http://169.254.169.254/latest/meta-data/network/interfaces/macs/${MAC_ADDRESS:-1}/vpc-id`
 
@@ -10,8 +12,13 @@ ROUTE_TABLES=`Shings-Air:aws-auto-healing-nat schen$ aws ec2 describe-route-tabl
 
 for i in $ROUTE_TABLES
 do
-   aws ec2 replace-route --route-table-id $i --destination-cidr-block 0.0.0.0/0 --instance-id $INSTANCE_ID --region $REGION
-   aws ec2 create-route --route-table-id $i --destination-cidr-block 0.0.0.0/0 --instance-id $INSTANCE_ID --region $REGION
+   # Replace default route
+   aws ec2 replace-route --route-table-id $i --destination-cidr-block 0.0.0.0/0 --instance-id $INSTANCE_ID --region $REGION > /dev/null 2>&1
+
+   # Create default route 
+   if [ $? -ne 0 ]; then
+      aws ec2 create-route --route-table-id $i --destination-cidr-block 0.0.0.0/0 --instance-id $INSTANCE_ID --region $REGION
+   fi
 done
 
 # disable source destination check
