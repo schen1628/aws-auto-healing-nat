@@ -3,32 +3,33 @@
   "Description": "Launch a NAT instance",
   "Parameters": {
     "InstanceType": {
-      "Description": "Instance type for the NAT instance",
+      "Description": "The instance type for a NAT instance",
       "Type": "String",
       "Default": "t2.micro",
-      "AllowedValues": [
-        "t2.micro",
-        "t2.small",
-        "t2.medium"
-      ],
+      "AllowedValues": [ "t2.micro", "t2.small", "t2.medium" ],
       "ConstraintDescription": "Please enter one of these instance types: t2.micro, t2.small, t2.medium."
     },
-    "KeyName": {
-      "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instance",
-      "Type": "String",
-      "Default": "schen"
-    },
     "NatSubnetId" : {
-      "Description" : "Subnet ID for hosting NAT instance",
+      "Description" : "The subnet ID for hosting a NAT instance",
       "Type" : "List<AWS::EC2::Subnet::Id>"
+    },
+    "TagKey": {
+      "Description": "The tag key name to determine if the route table needs a NAT instance",
+      "Type": "String",
+      "Default": "network"
+    },
+    "TagValue": {
+      "Description": "The tag value to determine if the route table needs a NAT instance",
+      "Type": "String",
+      "Default": "private"
     },
     "VpcCidrIp": {
       "Type": "String",
-      "Description": "VPC CIDR block for NAT access",
+      "Description": "The VPC CIDR block for NAT access",
       "Default": "10.0.0.0/16"
     },
     "VpcId": {
-      "Description": "ID of the VPC hosting NAT instance",
+      "Description": "The ID of a VPC hosting a NAT instance",
       "Type": "AWS::EC2::VPC::Id"
     },
   },
@@ -114,8 +115,6 @@
         "IamInstanceProfile": {"Ref": "NatInstanceProfile"},
         "InstanceType": {"Ref": "InstanceType"},
         "SecurityGroups": [ {"Ref": "NatSecurityGroup"}],
-        "KeyName": {"Ref": "KeyName"},
-        "EbsOptimized": false,
         "AssociatePublicIpAddress": true
       }
     },
