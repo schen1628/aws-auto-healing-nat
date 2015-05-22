@@ -31,7 +31,7 @@
     "VpcId": {
       "Description": "The ID of a VPC hosting a NAT instance",
       "Type": "AWS::EC2::VPC::Id"
-    },
+    }
   },
   "Mappings": {
     "RegionMap": {
