@@ -18,10 +18,6 @@
       "Type": "String",
       "Default": "schen"
     },
-    "VpcId": {
-      "Description": "ID of the VPC hosting NAT instance",
-      "Type": "AWS::EC2::VPC::Id"
-    },
     "NatSubnetId" : {
       "Description" : "Subnet ID for hosting NAT instance",
       "Type" : "List<AWS::EC2::Subnet::Id>"
@@ -30,7 +26,11 @@
       "Type": "String",
       "Description": "VPC CIDR block for NAT access",
       "Default": "10.0.0.0/16"
-    }
+    },
+    "VpcId": {
+      "Description": "ID of the VPC hosting NAT instance",
+      "Type": "AWS::EC2::VPC::Id"
+    },
   },
   "Mappings": {
     "RegionMap": {
@@ -49,21 +49,16 @@
     "NatAutoScalingGroup": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
       "Properties": {
-         "AvailabilityZones": { "Fn::GetAZs": "" },
          "MinSize": "1",
          "MaxSize": "1",
-         "Cooldown": "30",
+         "Cooldown": "60",
          "VPCZoneIdentifier": { "Ref": "NatSubnetId"},
          "LaunchConfigurationName": {
           "Ref": "LaunchConfig"
         },
-        "HealthCheckGracePeriod": 60,
+        "HealthCheckGracePeriod": 10,
         "Tags": [
-          {
-            "Key": "Name",
-            "Value": "NAT Instance",
-            "PropagateAtLaunch": "true"
-          }
+          { "Key": "Name", "Value": "NAT Instance", "PropagateAtLaunch": "true" }
         ],
         "HealthCheckType": "EC2"
       }
@@ -76,17 +71,11 @@
             "packages" : {},
             "files" : {
               "/tmp/nat.sh" : {
-                 "source" : "ihttps://raw.githubusercontent.com/schen1628/aws-auto-healing-nat/master/nat.sh",
+                 "source" : "https://raw.githubusercontent.com/schen1628/aws-auto-healing-nat/master/nat.sh",
                  "mode" : "000755",
                  "owner" : "ec2-user",
                  "group" : "ec2-user"
-             }
-
-          },
-            "commands" : {
-               "01-create-route" : {
-                  "command" : "/tmp/nat.sh"
-               }
+              }
             }
           }
         }
@@ -107,6 +96,8 @@
                 "         --resource LaunchConfig ",
                 "         --region ", { "Ref" : "AWS::Region" }, "\n",
 
+
+                "echo \"*/5 * * * * ec2-user /tmp/nat.sh --tag-key ", { "Ref": "TagKey" }, " --tag-value ", { "Ref": "TagValue" }, " \" >> /etc/crontab\n",
 
                 "# Signal the status from cfn-init\n",
                 "/opt/aws/bin/cfn-signal -e $? ",
@@ -135,7 +126,7 @@
         "VpcId": {"Ref": "VpcId"},
         "SecurityGroupIngress": [
           {
-            "IpProtocol": "all",
+            "IpProtocol": "-1",
             "FromPort": "0",
             "ToPort": "65535",
             "CidrIp": {"Ref": "VpcCidrIp"}
@@ -182,7 +173,8 @@
                     "ec2:CreateRoute",
                     "ec2:DeleteRoute",
                     "ec2:ModifyInstanceAttribute",
-                    "ec2:ReplaceRoute"
+                    "ec2:ReplaceRoute",
+                    "ec2:DescribeRouteTables"
                   ],
                   "Resource": "*"
                 }

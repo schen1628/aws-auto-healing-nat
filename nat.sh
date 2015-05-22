@@ -38,15 +38,23 @@ done
 # Determine route tables that need to use NAT for the same VPC
 ROUTE_TABLES=`aws ec2 describe-route-tables --filters "Name=tag:$TAG_KEY,Values=$TAG_VALUE" --region $REGION --output text | grep ROUTETABLES | grep $VPC_ID | awk '{print $2}'`
 
-for i in $ROUTE_TABLES
+for ROUTE_TABLE  in $ROUTE_TABLES
 do
-   # Replace default route
-   aws ec2 replace-route --route-table-id $i --destination-cidr-block 0.0.0.0/0 --instance-id $INSTANCE_ID --region $REGION > /dev/null 2>&1
+   TARGET=`aws ec2 describe-route-tables --filters "Name=route-table-id,Values=$ROUTE_TABLE" --region $REGION --output text | grep "0.0.0.0/0" | awk '{print $3}'`
 
-   # Create default route 
-   if [ $? -ne 0 ]; then
-      aws ec2 create-route --route-table-id $i --destination-cidr-block 0.0.0.0/0 --instance-id $INSTANCE_ID --region $REGION
+   echo "Checking $ROUTE_TABLE"
+   if [ "$TARGET" = "" ]; then
+      # Create default route 
+      echo "No default route is detected. Creating default route for $ROUTE_TABLE"
+      aws ec2 create-route --route-table-id $ROUTE_TABLE --destination-cidr-block 0.0.0.0/0 --instance-id $INSTANCE_ID --region $REGION
+   elif [ "$TARGET" != "$INSTANCE_ID" ]; then
+      # Replace default route
+      echo "Default route is set to $TARGET. Replacing default route to $INSTANCE_ID"
+      aws ec2 replace-route --route-table-id $ROUTE_TABLE --destination-cidr-block 0.0.0.0/0 --instance-id $INSTANCE_ID --region $REGION
+   else
+      echo "No change is required"
    fi
+
 done
 
 # disable source destination check
