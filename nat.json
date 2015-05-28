@@ -9,8 +9,8 @@
       "AllowedValues": [ "t2.micro", "t2.small", "t2.medium" ],
       "ConstraintDescription": "Please enter one of these instance types: t2.micro, t2.small, t2.medium."
     },
-    "NatSubnetId" : {
-      "Description" : "The subnet ID for hosting a NAT instance",
+    "NatSubnetIds" : {
+      "Description" : "A list of public subnets host a NAT instance in your VPC",
       "Type" : "List<AWS::EC2::Subnet::Id>"
     },
     "TagKey": {
@@ -53,7 +53,7 @@
          "MinSize": "1",
          "MaxSize": "1",
          "Cooldown": "60",
-         "VPCZoneIdentifier": { "Ref": "NatSubnetId"},
+         "VPCZoneIdentifier": { "Ref": "NatSubnetIds"},
          "LaunchConfigurationName": {
           "Ref": "LaunchConfig"
         },
